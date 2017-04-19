@@ -2,26 +2,34 @@ require 'rubygems'
 require 'selenium-webdriver'
 require 'test-unit'
 require 'browserstack/local'
+require 'rest-client'
 
 class SingleTest < Test::Unit::TestCase
 
   def setup
-    caps = Selenium::WebDriver::Remote::Capabilities.new
-		caps['browser'] = 'Chrome'
-		caps['browser_version'] = '56.0'
-		caps['os'] = 'OS X'
-		caps['os_version'] = 'Sierra'
+  	caps = Selenium::WebDriver::Remote::Capabilities.new
+		caps["browser"] = ENV['browser']
+		caps["browser_version"] = ENV['browser_version']
+		caps["os"] = ENV['os']
+		caps["os_version"] = ENV['os_version']
+
+		if ENV['browser'] != "Internet Explorer"
+			browser_name = "#{ENV['browser'].capitalize} #{ENV['browser_version']}"
+		else
+			browser_name = "Internet Explorer #{ENV['browser_version']}"
+		end
 
 		caps['project'] = "ACME, Inc. Website"
 		caps['build'] = Time.now
-		caps['name'] = "Single Test"
+		caps['name'] = browser_name
 
 		caps["browserstack.debug"] = "true"
 
     url = "http://#{ENV["BROWSERSTACK_USER"]}:#{ENV["BROWSERSTACK_ACCESSKEY"]}@hub-cloud.browserstack.com/wd/hub"
-    
     @driver = Selenium::WebDriver.for(:remote, :url => url, :desired_capabilities => caps)
 		@driver.manage.timeouts.implicit_wait = 10
+
+		@test_failure_message = "Success message not found on page"
   end
 
   def test_post
@@ -72,11 +80,14 @@ class SingleTest < Test::Unit::TestCase
 
 		success_message = @driver.find_element(:class, "contact-message")
 		sleep 1
-		assert(success_message.displayed?, "Success message not found on page")
+		assert(success_message.displayed?, @test_failure_message)
   end
 
   def teardown
-    @driver.quit
+    api_url = "https://#{ENV["BROWSERSTACK_USER"]}:#{ENV["BROWSERSTACK_ACCESSKEY"]}@www.browserstack.com/automate/sessions/#{@driver.session_id}.json"
+  	RestClient.put api_url, { "status" => "failed", "reason" => @test_failure_message}, {:content_type => :json} if ENV['browser'] == "Firefox"
+
+  	@driver.quit
   end
   
 end
